@@ -2,29 +2,29 @@
 #include<fstream>
 #include<stdlib.h>
 #include "ros/ros.h"
-#include "std_msgs/Twist.h"
+#include <std_msgs/Float32.h>
 #include <geometry_msgs/Twist.h>
 #include <eigen3/Eigen/Dense>
-
-using Eigen::MatrixXd;
-using Eigen::VectorXd;
+#include <sstream>
+using Eigen::MatrixXf;
+using Eigen::VectorXf;
 using namespace std;
 
 
-MatrixXd G(3,1);    //(3,1)
-MatrixXd G_meas(3,1);   //3,1
-MatrixXd b(3,1);   //3,1
-MatrixXd H(1,3);   //1,3
-MatrixXd R(3,3);
-MatrixXd P(3,3);
-MatrixXd sigma(3,3);
-MatrixXd Z(3,1);   //3,1
-MatrixXd Y(3,1);   //3,1
-MatrixXd S(3,3);  	
-MatrixXd K(3,3);
-MatrixXd I(3,3);
-MatrixXd Gnew(3,3);
-MatrixXd Hnew(3,3);
+MatrixXf G(3,1);    //(3,1)
+MatrixXf G_meas(3,1);   //3,1
+MatrixXf b(3,1);   //3,1
+MatrixXf H(1,3);   //1,3
+MatrixXf R(3,3);
+MatrixXf P(3,3);
+MatrixXf sigma(3,3);
+MatrixXf Z(3,1);   //3,1
+MatrixXf Y(3,1);   //3,1
+MatrixXf S(3,3);  	
+MatrixXf K(3,3);
+MatrixXf I(3,3);
+MatrixXf Gnew(3,3);
+MatrixXf Hnew(3,3);
 
 struct data_imu{
 	float angular_velocity_x;
@@ -34,20 +34,8 @@ struct data_imu{
 };
 data_imu gval;
 
-void left(const geometry_msgs::Twist& msg)
-{
-   gval.angular_velocity_x=msg.angular.x;
-   gval.angular_velocity_y=msg.angular.y;
-   gval.angular_velocity_z=msg.angular.z;
-   //ROS_INFO("I heard: [%f]", msg->data);
+std_msgs::Float32 bn;
 
-}
-void right(const geometry_msgs::Twist& msg)
-{
-   gval.angular_velocity_x=msg.angular.x;
-   gval.angular_velocity_y=msg.angular.y;
-   gval.angular_velocity_z=msg.angular.z;
-}
 
 void kalman(data_imu data_gyro)
 {
@@ -106,38 +94,32 @@ void kalman(data_imu data_gyro)
 	K = P.cwiseProduct(Hnew.transpose().cwiseProduct(S.inverse()));
 	b = b + K*Y; // try dot K.dot(Y)
 	P = (I - K.cwiseProduct(Hnew)).cwiseProduct(P);
-	cout<<"G_meas : "<<R<<"\n";
-
+	cout<<"Bias : "<<b<<"\n";
+	bn.data=b(2,0);
 
 }
 
 
+void right(const geometry_msgs::Twist& msg)
+{
+   gval.angular_velocity_x=msg.angular.x;
+   gval.angular_velocity_y=msg.angular.y;
+   gval.angular_velocity_z=msg.angular.z;
+}
+
 int main(int argc, char **argv)
 {
-	ros::init(argc, argv, "kalman");
+	ros::init(argc, argv, "kalman_left");
 	ros::NodeHandle n;
-	ros::Subscriber sub1 = n.subscribe("/gyro_data_left",1,&left);
-	ros::Subscriber sub2 = n.subscribe("/gyro_data_right",1,&right);
-	//ros::Subscriber sub2 = n.subscribe("/gy",1, y);
-	//ros::Subscriber sub3 = n.subscribe("/gz",1, z);
-	//kalman(gval);
-
-	 
-	// gval.angular_velocity_x=-0.099135;	
-	// gval.angular_velocity_y=0.900865;	
-	// gval.angular_velocity_z=1.900865;
-	int i=1;
-	while(i<10000)
-	{
-
-		// sub = n.subscribe("gx",1, x);
-		// // sub = n.subscribe("gx",1, y);
-		// // sub = n.subscribe("gx",1, z);
-		kalman(gval);
-
-		i++;
+	
+	ros::Subscriber sub1 = n.subscribe("/enc_right",1000,&right);
+	ros::Publisher pub1 = n.advertise<std_msgs::Float32>("bias_rz", 1);
+	while(ros::ok())
+	{	
+		pub1.publish(bn);
+		ros::spinOnce();
 	}
-
+	 
 	ros::spin();
 	return 0;
 
